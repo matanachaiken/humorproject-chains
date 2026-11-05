@@ -17,11 +17,14 @@ export default function StepForm({
   initial,
   submitLabel,
   resetOnSave = false,
+  lockedPlaceholders,
 }: {
   action: (state: FormState, formData: FormData) => Promise<FormState>;
   initial: { name: string; kind: StepKind; prompt_template: string };
   submitLabel: string;
   resetOnSave?: boolean;
+  // Set on Daily Riff's chains, whose step type and placeholders can't change.
+  lockedPlaceholders?: string[];
 }) {
   const [pending, start] = useTransition();
   const [state, setState] = useState<FormState>(null);
@@ -43,27 +46,38 @@ export default function StepForm({
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+      <div className={`grid gap-4 ${lockedPlaceholders ? "" : "sm:grid-cols-[1fr_12rem]"}`}>
         <Field label="Step name">
           <input name="name" required maxLength={120} defaultValue={initial.name} className={inputClass} />
         </Field>
-        <Field label="Type">
-          <select
-            name="kind"
-            value={kind}
-            onChange={(e) => setKind(e.target.value as StepKind)}
-            className={inputClass}
-          >
-            {Object.entries(STEP_KINDS).map(([id, { label }]) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {!lockedPlaceholders && (
+          <Field label="Type">
+            <select
+              name="kind"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as StepKind)}
+              className={inputClass}
+            >
+              {Object.entries(STEP_KINDS).map(([id, { label }]) => (
+                <option key={id} value={id}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
       </div>
       <p className="text-xs text-muted">{STEP_KINDS[kind].hint}</p>
-      <Field label="Prompt" hint={HINT}>
+      <Field
+        label="Prompt"
+        hint={
+          lockedPlaceholders
+            ? lockedPlaceholders.length
+              ? `Keep these placeholders: ${lockedPlaceholders.join(", ")}`
+              : "This step takes no placeholders."
+            : HINT
+        }
+      >
         <textarea
           name="prompt_template"
           required

@@ -21,6 +21,11 @@ export type Step = {
 
 const PLACEHOLDER = /\{\{(\w+)\}\}/g;
 
+// Each distinct placeholder in a template, like "{{theme}}", sorted.
+export function placeholders(template: string) {
+  return [...new Set(template.match(PLACEHOLDER) ?? [])].sort();
+}
+
 // Fills {{name}} placeholders. Unknown ones are left as-is so they're easy to spot.
 export function render(template: string, vars: Record<string, string>) {
   return template.replace(PLACEHOLDER, (match, name: string) => vars[name] ?? match);

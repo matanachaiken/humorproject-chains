@@ -5,11 +5,12 @@ import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/dal";
-import { isStepKind } from "@/lib/chains";
+import { isStepKind, placeholders } from "@/lib/chains";
 import { removeImages } from "@/lib/runs";
 
 // Server actions are public endpoints, so each one checks for an admin itself
-// and that the chain is a studio chain, instead of trusting the page.
+// instead of trusting the page. Daily Riff's chains can have their wording
+// edited, but anything that changes their structure needs a studio chain.
 
 export type FormState = { error?: string; saved?: boolean } | null;
 
@@ -34,6 +35,8 @@ function readStep(formData: FormData) {
   if (!prompt_template || prompt_template.length > 20000) return { error: "Prompt must be 1–20,000 characters." };
   return { fields: { name, kind, prompt_template } };
 }
+
+type StepRow = { kind: string; prompt_template: string; prompt_chains: { purpose: string } | null };
 
 async function isStudioChain(db: SupabaseClient, chainId: number) {
   const { data } = await db.from("prompt_chains").select("purpose").eq("id", chainId).maybeSingle();
@@ -79,7 +82,6 @@ export async function createChain(_prev: FormState, formData: FormData): Promise
 
 export async function updateChain(chainId: number, _prev: FormState, formData: FormData): Promise<FormState> {
   const { db } = await requireAdmin();
-  if (!(await isStudioChain(db, chainId))) return { error: NOT_EDITABLE };
   const { fields, error } = readChain(formData);
   if (!fields) return { error };
 
@@ -136,9 +138,29 @@ export async function addStep(chainId: number, _prev: FormState, formData: FormD
 
 export async function updateStep(stepId: number, _prev: FormState, formData: FormData): Promise<FormState> {
   const { db } = await requireAdmin();
-  if (!(await studioStep(db, stepId))) return { error: NOT_EDITABLE };
+  const { data: step } = await db
+    .from("prompt_chain_steps")
+    .select("kind, prompt_template, prompt_chains (purpose)")
+    .eq("id", stepId)
+    .maybeSingle()
+    .overrideTypes<StepRow | null, { merge: false }>();
+  if (!step) return { error: "That step doesn't exist anymore." };
+
+  // Daily Riff fills in these placeholders and expects each step's type.
+  const live = step.prompt_chains?.purpose !== "studio";
+  if (live) formData.set("kind", step.kind);
   const { fields, error } = readStep(formData);
   if (!fields) return { error };
+  if (live) {
+    const required = placeholders(step.prompt_template);
+    if (required.join() !== placeholders(fields.prompt_template).join()) {
+      return {
+        error: required.length
+          ? `Daily Riff needs exactly these placeholders: ${required.join(", ")}.`
+          : "Daily Riff doesn't fill in placeholders on this step, so remove them.",
+      };
+    }
+  }
 
   const { error: updateError } = await db.from("prompt_chain_steps").update(fields).eq("id", stepId);
   if (updateError) {

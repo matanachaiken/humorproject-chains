@@ -52,7 +52,7 @@ export default async function ChainsPage() {
 
       <h2 className="mb-1 mt-10 font-semibold">Used by Daily Riff</h2>
       <p className="mb-3 text-sm text-ink-2">
-        The live site runs these, so you can view them and their media but not change them.
+        The live site runs these. They&apos;re read-only until you turn on editing inside a chain.
       </p>
       <ul className="space-y-3">
         {live.map((c) => (
